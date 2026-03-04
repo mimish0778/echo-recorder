@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>22kHz エコー録音</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+:root {
+  --bg: #0e1117;
+  --surface: #161b27;
+  --surface2: #1e2535;
+  --border: #2a3348;
+  --accent: #4f9cf9;
+  --accent-dim: rgba(79,156,249,0.15);
+  --red: #f25757;
+  --red-dim: rgba(242,87,87,0.15);
+  --green: #4fd1a0;
+  --yellow: #f7c948;
+  --text: #e2e8f4;
+  --text-muted: #6b7a99;
+  --text-dim: #3d4f6e;
+  --radius: 14px;
+  --radius-sm: 8px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans JP', sans-serif;
+  min-height: 100vh;
+  padding: 24px 16px 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.app {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header { text-align: center; padding: 8px 0 4px; }
+.header-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px; font-weight: 700;
+  color: var(--accent); letter-spacing: 0.04em;
+}
+.header-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; letter-spacing: 0.08em; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.card-label {
+  font-size: 11px; font-weight: 500;
+  color: var(--text-muted); letter-spacing: 0.2em;
+  text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-label::before {
+  content: ''; display: inline-block;
+  width: 3px; height: 12px;
+  background: var(--accent); border-radius: 2px;
+}
+
+.freq-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.freq-big {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 42px; font-weight: 700;
+  color: var(--accent); line-height: 1; letter-spacing: -1px;
+}
+.freq-big span { font-size: 18px; color: var(--text-muted); font-weight: 400; }
+.freq-badges { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+.badge { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.05em; }
+.badge-blue  { background: var(--accent-dim); color: var(--accent); }
+.badge-yellow { background: rgba(247,201,72,0.15); color: var(--yellow); }
+
+.slider-group { display: flex; flex-direction: column; gap: 12px; }
+.slider-row { display: flex; flex-direction: column; gap: 6px; }
+.slider-header { display: flex; justify-content: space-between; align-items: center; }
+.slider-name { font-size: 12px; color: var(--text-muted); }
+.slider-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); }
+
+input[type=range] {
+  -webkit-appearance: none; width: 100%; height: 5px;
+  background: var(--border); border-radius: 3px; outline: none; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,156,249,0.25);
+  cursor: pointer; transition: box-shadow 0.15s;
+}
+input[type=range]::-webkit-slider-thumb:active { box-shadow: 0 0 0 6px rgba(79,156,249,0.2); }
+
+.wave-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.wave-chip {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  padding: 7px 4px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-muted);
+  cursor: pointer; border-radius: var(--radius-sm);
+  text-align: center; transition: all 0.15s; letter-spacing: 0.05em;
+}
+.wave-chip:hover { border-color: var(--accent); color: var(--accent); }
+.wave-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 700; }
+
+.main-btn {
+  width: 100%; padding: 18px;
+  border-radius: var(--radius); border: 2px solid transparent;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 17px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  transition: all 0.18s; letter-spacing: 0.05em;
+  position: relative; overflow: hidden;
+}
+.main-btn:active { transform: scale(0.98); }
+.main-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+.btn-emit { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.btn-emit:hover:not(:disabled) { background: rgba(79,156,249,0.25); box-shadow: 0 0 24px rgba(79,156,249,0.2); }
+.btn-emit.active {
+  background: var(--accent); color: #fff;
+  box-shadow: 0 0 32px rgba(79,156,249,0.4);
+  animation: emit-pulse 2s ease-in-out infinite;
+}
+@keyframes emit-pulse {
+  0%,100% { box-shadow: 0 0 20px rgba(79,156,249,0.3); }
+  50%      { box-shadow: 0 0 40px rgba(79,156,249,0.6); }
+}
+
+.btn-rec { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+.btn-rec:hover:not(:disabled) { background: rgba(242,87,87,0.25); box-shadow: 0 0 24px rgba(242,87,87,0.2); }
+.btn-rec.active {
+  background: var(--red); color: #fff;
+  box-shadow: 0 0 32px rgba(242,87,87,0.4);
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  0%,100% { box-shadow: 0 0 20px rgba(242,87,87,0.3); }
+  50%      { box-shadow: 0 0 48px rgba(242,87,87,0.65); }
+}
+.btn-icon { font-size: 20px; line-height: 1; }
+
+@keyframes blink { 50% { opacity: 0; } }
+
+.status-strip {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+}
+.status-left { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); transition: all 0.3s; flex-shrink: 0; }
+.status-dot.emit { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.status-dot.rec  { background: var(--red); box-shadow: 0 0 6px var(--red); animation: blink 1s step-start infinite; }
+.status-dot.mic  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.timer { font-family: 'JetBrains Mono', monospace; font-size: 15px; color: var(--red); font-weight: 700; display: none; }
+.timer.show { display: block; }
+
+.vol-row { display: flex; align-items: center; gap: 10px; }
+.vol-label-text { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); width: 28px; flex-shrink: 0; }
+.vol-track { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.vol-fill { height: 100%; width: 0%; border-radius: 3px; background: linear-gradient(90deg, var(--green), var(--accent)); transition: width 0.05s; }
+.vol-db { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); width: 42px; text-align: right; flex-shrink: 0; }
+
+.canvas-wrap { position: relative; border-radius: var(--radius-sm); overflow: hidden; background: #0a0e18; }
+.canvas-title { position: absolute; top: 8px; left: 10px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); letter-spacing: 0.15em; text-transform: uppercase; z-index: 1; }
+canvas { width: 100%; display: block; }
+#oscCanvas  { height: 100px; }
+#specCanvas { height: 80px; }
+
+.info-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.info-cell { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; }
+.info-cell-label { font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; margin-bottom: 4px; }
+.info-cell-val { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--text); font-weight: 700; }
+
+.rec-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; padding-right: 2px; }
+.rec-list::-webkit-scrollbar { width: 4px; }
+.rec-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.rec-item { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; animation: fadeIn 0.25s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.rec-item-top { display: flex; justify-content: space-between; align-items: center; }
+.rec-item-name { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent); font-weight: 700; }
+.rec-item-meta { font-size: 11px; color: var(--text-muted); }
+.rec-item-actions { display: flex; gap: 6px; align-items: center; }
+.mini-btn { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.05em; }
+.mini-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.mini-btn.danger:hover { border-color: var(--red); color: var(--red); background: var(--red-dim); }
+audio { width: 100%; height: 30px; border-radius: 6px; }
+.empty-msg { text-align: center; padding: 28px 0; color: var(--text-dim); font-size: 13px; letter-spacing: 0.1em; }
+
+.guide { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.guide-title { font-size: 12px; font-weight: 500; color: var(--text-muted); letter-spacing: 0.1em; }
+.guide-steps { display: flex; flex-direction: column; gap: 8px; }
+.guide-step { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+.guide-num { width: 20px; height: 20px; border-radius: 50%; background: var(--border); color: var(--text-muted); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <div class="header-title">22kHz エコー録音</div>
+    <div class="header-sub">超音波トーン出力 ＋ マイク収録</div>
+  </div>
+
+  <!-- How to use -->
+  <div class="guide">
+    <div class="guide-title">📋 使い方</div>
+    <div class="guide-steps">
+      <div class="guide-step"><div class="guide-num">1</div><span>周波数・音量を設定する</span></div>
+      <div class="guide-step"><div class="guide-num">2</div><span>「トーン開始」でスピーカーから超音波を出力</span></div>
+      <div class="guide-step"><div class="guide-num">3</div><span>「録音開始」でマイクが反響音を収録（エコーキャンセルOFF）</span></div>
+      <div class="guide-step"><div class="guide-num">4</div><span>「録音停止」→ 再生 / ダウンロードで確認</span></div>
+    </div>
+  </div>
+
+  <!-- Signal settings -->
+  <div class="card">
+    <div class="card-label">信号設定</div>
+    <div class="freq-row">
+      <div class="freq-big" id="freqDisplay">22,000<span> Hz</span></div>
+      <div class="freq-badges">
+        <div class="badge badge-blue" id="classLabel">超音波域</div>
+        <div class="badge badge-yellow" id="waveLabel">SINE 波</div>
+      </div>
+    </div>
+    <div class="slider-group">
+      <div class="slider-row">
+        <div class="slider-header">
+          <span class="slider-name">周波数</span>
+          <span class="slider-val" id="freqSliderVal">22,000 Hz</span>
+        </div>
+        <input type="range" id="freqSlider" min="15000" max="22000" value="22000" step="100">
+      </div>
+      <div class="slider-row">
+        <div class="slider-header">
+          <span class="slider-name">音量</span>
+          <span class="slider-val" id="volSliderVal">60%</span>
+        </div>
+        <input type="range" id="volSlider" min="0" max="100" value="60" step="1">
+      </div>
+    </div>
+    <div class="wave-grid">
+      <button class="wave-chip active" data-wave="sine">SINE</button>
+      <button class="wave-chip" data-wave="square">SQUARE</button>
+      <button class="wave-chip" data-wave="sawtooth">SAW</button>
+      <button class="wave-chip" data-wave="triangle">TRI</button>
+    </div>
+    <div class="info-row">
+      <div class="info-cell"><div class="info-cell-label">波長</div><div class="info-cell-val" id="infoWl">15.6mm</div></div>
+      <div class="info-cell"><div class="info-cell-label">周期</div><div class="info-cell-val" id="infoPeriod">45.5μs</div></div>
+      <div class="info-cell"><div class="info-cell-label">録音数</div><div class="info-cell-val" id="infoCount">0</div></div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="card">
+    <div class="card-label">コントロール</div>
+    <button class="main-btn btn-emit" id="btnEmit">
+      <span class="btn-icon" id="emitIcon">▶</span>
+      <span id="emitLabel">トーン開始</span>
+    </button>
+    <button class="main-btn btn-rec" id="btnRec" disabled>
+      <span class="btn-icon" id="recIcon">⏺</span>
+      <span id="recLabel">録音開始</span>
+    </button>
+    <div class="status-strip">
+      <div class="status-left">
+        <div class="status-dot" id="dotEmit"></div>
+        <span id="statusText">待機中 — マイク許可が必要です</span>
+      </div>
+      <div class="timer" id="timer">00:00</div>
+    </div>
+    <div class="vol-row">
+      <div class="vol-label-text">MIC</div>
+      <div class="vol-track"><div class="vol-fill" id="volFill"></div></div>
+      <div class="vol-db" id="volDb">—</div>
+    </div>
+  </div>
+
+  <!-- Visualizer -->
+  <div class="card">
+    <div class="card-label">ビジュアライザー</div>
+    <div class="canvas-wrap">
+      <div class="canvas-title">TIME DOMAIN</div>
+      <canvas id="oscCanvas"></canvas>
+    </div>
+    <div class="canvas-wrap">
+      <div class="canvas-title">SPECTRUM  0 – 24kHz</div>
+      <canvas id="specCanvas"></canvas>
+    </div>
+  </div>
+
+  <!-- Recordings -->
+  <div class="card">
+    <div class="card-label">録音リスト</div>
+    <div class="rec-list" id="recList">
+      <div class="empty-msg">まだ録音がありません</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SPEED = 343;
+let audioCtx=null, oscillator=null, gainNode=null;
+let emitting=false, recording=false;
+let micStream=null, micAnalyser=null;
+let mediaRecorder=null, chunks=[];
+let recordings=[], recStart=null, timerIv=null, animId=null;
+let waveType='sine';
+
+const $=id=>document.getElementById(id);
+const freqSlider=$('freqSlider'), volSlider=$('volSlider');
+const freqDisplay=$('freqDisplay'), freqSliderVal=$('freqSliderVal'), volSliderVal=$('volSliderVal');
+const btnEmit=$('btnEmit'), btnRec=$('btnRec');
+const emitIcon=$('emitIcon'), emitLabel=$('emitLabel'), recIcon=$('recIcon'), recLabel=$('recLabel');
+const dotEmit=$('dotEmit'), statusText=$('statusText'), timer=$('timer');
+const volFill=$('volFill'), volDb=$('volDb'), recList=$('recList');
+const oscCanvas=$('oscCanvas'), specCanvas=$('specCanvas');
+const oscCtx=oscCanvas.getContext('2d'), spCtx=specCanvas.getContext('2d');
+const classLabel=$('classLabel'), waveLabel=$('waveLabel');
+const infoWl=$('infoWl'), infoPeriod=$('infoPeriod'), infoCount=$('infoCount');
+
+function resizeCanvases() {
+  const dpr=devicePixelRatio||1;
+  [oscCanvas,specCanvas].forEach(c=>{c.width=c.offsetWidth*dpr;c.height=c.offsetHeight*dpr;});
+}
+resizeCanvases();
+window.addEventListener('resize',resizeCanvases);
+
+function updateInfo(freq) {
+  freqDisplay.innerHTML=freq.toLocaleString()+'<span> Hz</span>';
+  freqSliderVal.textContent=freq.toLocaleString()+' Hz';
+  infoWl.textContent=(SPEED/freq*1000).toFixed(1)+'mm';
+  infoPeriod.textContent=(1/freq*1e6).toFixed(1)+'μs';
+  classLabel.textContent=freq>=20000?'超音波域':freq>=16000?'準超音波':'可聴域';
+}
+updateInfo(22000);
+
+freqSlider.addEventListener('input',()=>{
+  const f=parseInt(freqSlider.value); updateInfo(f);
+  if(oscillator&&emitting) oscillator.frequency.setTargetAtTime(f,audioCtx.currentTime,0.01);
+});
+volSlider.addEventListener('input',()=>{
+  volSliderVal.textContent=volSlider.value+'%';
+  if(gainNode) gainNode.gain.setTargetAtTime(volSlider.value/100*0.85,audioCtx.currentTime,0.01);
+});
+
+document.querySelectorAll('.wave-chip').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.wave-chip').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); waveType=btn.dataset.wave;
+    waveLabel.textContent=waveType.toUpperCase()+' 波';
+    if(oscillator&&emitting) oscillator.type=waveType;
+  });
+});
+
+async function ensureCtx() {
+  if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') await audioCtx.resume();
+}
+
+btnEmit.addEventListener('click',async()=>{ await ensureCtx(); emitting?stopEmit():startEmit(); });
+
+function startEmit() {
+  const freq=parseInt(freqSlider.value);
+  gainNode=audioCtx.createGain(); gainNode.gain.value=volSlider.value/100*0.85;
+  oscillator=audioCtx.createOscillator();
+  oscillator.type=waveType; oscillator.frequency.value=freq;
+  oscillator.connect(gainNode); gainNode.connect(audioCtx.destination);
+  oscillator.start(); emitting=true;
+  btnEmit.classList.add('active'); emitIcon.textContent='■'; emitLabel.textContent='トーン停止';
+  dotEmit.className='status-dot emit';
+  setStatus('トーン出力中 — '+freq.toLocaleString()+' Hz');
+  btnRec.disabled=false;
+}
+function stopEmit() {
+  try{oscillator?.stop();}catch(e){}
+  oscillator?.disconnect(); oscillator=null;
+  gainNode?.disconnect(); gainNode=null;
+  emitting=false; btnEmit.classList.remove('active');
+  emitIcon.textContent='▶'; emitLabel.textContent='トーン開始';
+  dotEmit.className='status-dot'+(micStream?' mic':'');
+  if(!recording){ btnRec.disabled=true; setStatus(micStream?'マイク準備完了':'待機中'); }
+}
+
+async function initMic() {
+  if(micStream) return true;
+  try {
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,sampleRate:48000}});
+    await ensureCtx();
+    const src=audioCtx.createMediaStreamSource(micStream);
+    micAnalyser=audioCtx.createAnalyser(); micAnalyser.fftSize=4096; micAnalyser.smoothingTimeConstant=0.55;
+    src.connect(micAnalyser);
+    dotEmit.className='status-dot'+(emitting?' emit':' mic');
+    return true;
+  } catch(e) { setStatus('⚠ マイクへのアクセスが拒否されました'); return false; }
+}
+
+btnRec.addEventListener('click',async()=>{
+  await ensureCtx();
+  if(recording){ stopRec(); } else { const ok=await initMic(); if(ok) startRec(); }
+});
+
+function startRec() {
+  chunks=[];
+  const opts={mimeType:'audio/webm;codecs=opus'};
+  try{mediaRecorder=new MediaRecorder(micStream,opts);}catch(e){mediaRecorder=new MediaRecorder(micStream);}
+  mediaRecorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  mediaRecorder.onstop=finalizeRec;
+  mediaRecorder.start(100); recording=true; recStart=Date.now();
+  btnRec.classList.add('active'); recIcon.textContent='⏹'; recLabel.textContent='録音停止';
+  dotEmit.className='status-dot rec'; timer.classList.add('show');
+  timerIv=setInterval(()=>{
+    const s=Math.floor((Date.now()-recStart)/1000);
+    timer.textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+  },500);
+  setStatus('録音中 — 反響を収録しています');
+}
+function stopRec() {
+  if(mediaRecorder?.state!=='inactive') mediaRecorder?.stop();
+  recording=false; btnRec.classList.remove('active');
+  recIcon.textContent='⏺'; recLabel.textContent='録音開始';
+  dotEmit.className='status-dot'+(emitting?' emit':micStream?' mic':'');
+  timer.classList.remove('show'); clearInterval(timerIv);
+  setStatus(emitting?'トーン出力中':'マイク準備完了');
+}
+function finalizeRec() {
+  const blob=new Blob(chunks,{type:'audio/webm'});
+  const url=URL.createObjectURL(blob);
+  const dur=((Date.now()-recStart)/1000).toFixed(1);
+  const freq=freqSlider.value;
+  const idx=recordings.length+1;
+  const ts=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  recordings.push({url,blob,dur,freq,idx,ts});
+  infoCount.textContent=recordings.length;
+  renderList();
+}
+
+function renderList() {
+  if(!recordings.length){ recList.innerHTML='<div class="empty-msg">まだ録音がありません</div>'; return; }
+  recList.innerHTML='';
+  [...recordings].reverse().forEach(r=>{
+    const el=document.createElement('div'); el.className='rec-item';
+    el.innerHTML=`
+      <div class="rec-item-top">
+        <div class="rec-item-name">REC #${String(r.idx).padStart(2,'0')}</div>
+        <div class="rec-item-meta">${r.freq} Hz · ${r.dur}s · ${r.ts}</div>
+      </div>
+      <audio controls src="${r.url}"></audio>
+      <div class="rec-item-actions">
+        <button class="mini-btn" onclick="dlRec('${r.url}',${r.idx},'${r.freq}')">↓ ダウンロード</button>
+        <button class="mini-btn danger" onclick="delRec(${r.idx})">削除</button>
+      </div>`;
+    recList.appendChild(el);
+  });
+}
+window.dlRec=(url,idx,freq)=>{const a=document.createElement('a');a.href=url;a.download=`echo_${freq}hz_${String(idx).padStart(2,'0')}.webm`;a.click();};
+window.delRec=(idx)=>{ recordings=recordings.filter(r=>r.idx!==idx); infoCount.textContent=recordings.length; renderList(); };
+
+function setStatus(msg){statusText.textContent=msg;}
+
+function drawLoop() {
+  animId=requestAnimationFrame(drawLoop);
+  const dpr=devicePixelRatio||1;
+  const W=oscCanvas.width, H=oscCanvas.height;
+  oscCtx.fillStyle='#0a0e18'; oscCtx.fillRect(0,0,W,H);
+  if(micAnalyser){
+    const buf=new Float32Array(micAnalyser.fftSize);
+    micAnalyser.getFloatTimeDomainData(buf);
+    oscCtx.strokeStyle='#1e2535'; oscCtx.lineWidth=1;
+    oscCtx.beginPath(); oscCtx.moveTo(0,H/2); oscCtx.lineTo(W,H/2); oscCtx.stroke();
+    const color=recording?'#f25757':'#4f9cf9';
+    oscCtx.strokeStyle=color; oscCtx.shadowColor=color;
+    oscCtx.shadowBlur=8*dpr; oscCtx.lineWidth=1.5*dpr;
+    oscCtx.beginPath();
+    const step=W/buf.length;
+    for(let i=0;i<buf.length;i++){const x=i*step,y=(0.5+buf[i]*0.42)*H;i===0?oscCtx.moveTo(x,y):oscCtx.lineTo(x,y);}
+    oscCtx.stroke(); oscCtx.shadowBlur=0;
+    let rms=0; for(let i=0;i<buf.length;i++) rms+=buf[i]*buf[i];
+    rms=Math.sqrt(rms/buf.length);
+    const db=20*Math.log10(rms+1e-9);
+    const pct=Math.max(0,Math.min(100,(db+60)/60*100));
+    volFill.style.width=pct+'%';
+    volDb.textContent=db>-59?db.toFixed(0)+' dB':'—';
+  } else {
+    oscCtx.strokeStyle='#1e2535'; oscCtx.lineWidth=1;
+    oscCtx.beginPath(); oscCtx.moveTo(0,H/2); oscCtx.lineTo(W,H/2); oscCtx.stroke();
+  }
+  const SW=specCanvas.width, SH=specCanvas.height;
+  spCtx.fillStyle='#0a0e18'; spCtx.fillRect(0,0,SW,SH);
+  if(micAnalyser&&audioCtx){
+    const fb=new Uint8Array(micAnalyser.frequencyBinCount);
+    micAnalyser.getByteFrequencyData(fb);
+    const nyq=audioCtx.sampleRate/2, maxF=24000;
+    for(let i=0;i<fb.length;i++){
+      const bFreq=i/fb.length*nyq; if(bFreq>maxF) break;
+      const x=(bFreq/maxF)*SW, bh=(fb[i]/255)*SH;
+      const hue=190+(bFreq/maxF)*50;
+      spCtx.fillStyle=`hsla(${hue},90%,55%,0.85)`;
+      spCtx.fillRect(x,SH-bh,Math.max(1,SW/fb.length*1.3),bh);
+    }
+    [5,10,15,20,22].forEach(k=>{
+      const x=(k*1000/maxF)*SW;
+      spCtx.strokeStyle='#1e2535'; spCtx.lineWidth=1;
+      spCtx.beginPath(); spCtx.moveTo(x,0); spCtx.lineTo(x,SH); spCtx.stroke();
+      spCtx.fillStyle='#3d4f6e'; spCtx.font=`${10*dpr}px JetBrains Mono,monospace`;
+      spCtx.fillText(k+'k',x+3,SH-4);
+    });
+    const x22=(22000/maxF)*SW;
+    spCtx.strokeStyle='rgba(79,156,249,0.4)'; spCtx.lineWidth=1.5;
+    spCtx.setLineDash([4,4]);
+    spCtx.beginPath(); spCtx.moveTo(x22,0); spCtx.lineTo(x22,SH); spCtx.stroke();
+    spCtx.setLineDash([]);
+  }
+}
+drawLoop();
+</script>
+</body>
+</html>
