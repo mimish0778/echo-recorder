@@ -402,7 +402,11 @@ async function initMic() {
     micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false,sampleRate:48000}});
     await ensureCtx();
     const src=audioCtx.createMediaStreamSource(micStream);
-    micAnalyser=audioCtx.createAnalyser(); micAnalyser.fftSize=4096; micAnalyser.smoothingTimeConstant=0.55;
+    micAnalyser=audioCtx.createAnalyser();
+    micAnalyser.fftSize=4096;
+    micAnalyser.smoothingTimeConstant=0.2;
+    micAnalyser.minDecibels=-90;
+    micAnalyser.maxDecibels=-10;
     src.connect(micAnalyser);
     dotEmit.className='status-dot'+(emitting?' emit':' mic');
     return true;
@@ -485,16 +489,19 @@ function drawLoop() {
     const color=recording?'#f25757':'#4f9cf9';
     oscCtx.strokeStyle=color; oscCtx.shadowColor=color;
     oscCtx.shadowBlur=8*dpr; oscCtx.lineWidth=1.5*dpr;
+    // 感度ゲイン: 小さな音でも波形が見えるよう増幅
+    const GAIN = 12;
     oscCtx.beginPath();
     const step=W/buf.length;
-    for(let i=0;i<buf.length;i++){const x=i*step,y=(0.5+buf[i]*0.42)*H;i===0?oscCtx.moveTo(x,y):oscCtx.lineTo(x,y);}
+    for(let i=0;i<buf.length;i++){const x=i*step,y=(0.5+buf[i]*GAIN*0.42)*H;i===0?oscCtx.moveTo(x,y):oscCtx.lineTo(x,y);}
     oscCtx.stroke(); oscCtx.shadowBlur=0;
     let rms=0; for(let i=0;i<buf.length;i++) rms+=buf[i]*buf[i];
     rms=Math.sqrt(rms/buf.length);
     const db=20*Math.log10(rms+1e-9);
-    const pct=Math.max(0,Math.min(100,(db+60)/60*100));
+    // -80dB〜0dBの範囲でメーター表示（感度を上げる）
+    const pct=Math.max(0,Math.min(100,(db+80)/80*100));
     volFill.style.width=pct+'%';
-    volDb.textContent=db>-59?db.toFixed(0)+' dB':'—';
+    volDb.textContent=db>-79?db.toFixed(0)+' dB':'—';
   } else {
     oscCtx.strokeStyle='#1e2535'; oscCtx.lineWidth=1;
     oscCtx.beginPath(); oscCtx.moveTo(0,H/2); oscCtx.lineTo(W,H/2); oscCtx.stroke();
