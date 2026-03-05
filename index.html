@@ -114,6 +114,22 @@ input[type=range]::-webkit-slider-thumb:active { box-shadow: 0 0 0 6px rgba(79,1
 .wave-chip:hover { border-color: var(--accent); color: var(--accent); }
 .wave-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 700; }
 
+.preset-label { font-size: 11px; color: var(--text-muted); letter-spacing: 0.1em; margin-bottom: -4px; }
+.preset-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.preset-btn {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+  padding: 8px 4px 6px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-muted);
+  cursor: pointer; border-radius: var(--radius-sm);
+  text-align: center; transition: all 0.15s;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.preset-btn span { font-size: 9px; font-weight: 400; color: var(--text-dim); font-family: 'Noto Sans JP', sans-serif; }
+.preset-btn:hover { border-color: var(--yellow); color: var(--yellow); }
+.preset-btn:hover span { color: var(--yellow); opacity: 0.7; }
+.preset-btn.active { background: rgba(247,201,72,0.12); border-color: var(--yellow); color: var(--yellow); }
+.preset-btn.active span { color: var(--yellow); opacity: 0.7; }
+
 .main-btn {
   width: 100%; padding: 18px;
   border-radius: var(--radius); border: 2px solid transparent;
@@ -243,10 +259,10 @@ canvas { width: 100%; display: block; }
     <div class="slider-group">
       <div class="slider-row">
         <div class="slider-header">
-          <span class="slider-name">周波数</span>
+          <span class="slider-name">周波数 (20Hz〜22,000Hz)</span>
           <span class="slider-val" id="freqSliderVal">22,000 Hz</span>
         </div>
-        <input type="range" id="freqSlider" min="15000" max="22000" value="22000" step="100">
+        <input type="range" id="freqSlider" min="20" max="22000" value="22000" step="1">
       </div>
       <div class="slider-row">
         <div class="slider-header">
@@ -261,6 +277,18 @@ canvas { width: 100%; display: block; }
       <button class="wave-chip" data-wave="square">SQUARE</button>
       <button class="wave-chip" data-wave="sawtooth">SAW</button>
       <button class="wave-chip" data-wave="triangle">TRI</button>
+    </div>
+    <!-- プリセット周波数 -->
+    <div class="preset-label">よく使う周波数</div>
+    <div class="preset-grid">
+      <button class="preset-btn" data-freq="100">100Hz<span>超低音</span></button>
+      <button class="preset-btn" data-freq="440">440Hz<span>ラ音</span></button>
+      <button class="preset-btn" data-freq="1000">1kHz<span>中音</span></button>
+      <button class="preset-btn" data-freq="4000">4kHz<span>高音</span></button>
+      <button class="preset-btn" data-freq="8000">8kHz<span>高倍音</span></button>
+      <button class="preset-btn" data-freq="15000">15kHz<span>準超音波</span></button>
+      <button class="preset-btn" data-freq="18000">18kHz<span>超音波下限</span></button>
+      <button class="preset-btn active" data-freq="22000">22kHz<span>超音波</span></button>
     </div>
     <div class="info-row">
       <div class="info-cell"><div class="info-cell-label">波長</div><div class="info-cell-val" id="infoWl">15.6mm</div></div>
@@ -348,11 +376,24 @@ window.addEventListener('resize',resizeCanvases);
 function updateInfo(freq) {
   freqDisplay.innerHTML=freq.toLocaleString()+'<span> Hz</span>';
   freqSliderVal.textContent=freq.toLocaleString()+' Hz';
-  infoWl.textContent=(SPEED/freq*1000).toFixed(1)+'mm';
-  infoPeriod.textContent=(1/freq*1e6).toFixed(1)+'μs';
-  classLabel.textContent=freq>=20000?'超音波域':freq>=16000?'準超音波':'可聴域';
+  const wl = freq < 1000 ? (SPEED/freq).toFixed(2)+'m' : (SPEED/freq*100).toFixed(1)+'cm';
+  infoWl.textContent = wl;
+  const period = freq >= 1000 ? (1/freq*1e6).toFixed(1)+'μs' : (1/freq*1000).toFixed(2)+'ms';
+  infoPeriod.textContent = period;
+  classLabel.textContent=freq>=20000?'超音波域':freq>=16000?'準超音波域':freq>=4000?'高音域':freq>=1000?'中音域':freq>=200?'低音域':'超低音域';
 }
 updateInfo(22000);
+
+// ── プリセットボタン ────────────────────────────────────────────────────────
+document.querySelectorAll('.preset-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const f=parseInt(btn.dataset.freq);
+    freqSlider.value=f; updateInfo(f);
+    if(oscillator&&emitting) oscillator.frequency.setTargetAtTime(f,audioCtx.currentTime,0.01);
+    document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
 
 freqSlider.addEventListener('input',()=>{
   const f=parseInt(freqSlider.value); updateInfo(f);
@@ -543,8 +584,8 @@ function renderList() {
       <div class="progress-bar-wrap"><div class="progress-bar-fill" id="${progId}"></div></div>
       <div class="gain-row">
         <span class="gain-label">再生音量ゲイン</span>
-        <input type="range" id="${gainId}" min="1" max="20" value="5" step="0.5" style="flex:1">
-        <span class="gain-val" id="gv-${r.idx}">×5.0</span>
+        <input type="range" id="${gainId}" min="1" max="200" value="100" step="1" style="flex:1">
+        <span class="gain-val" id="gv-${r.idx}">×100</span>
       </div>
       <div class="rec-item-actions">
         <button class="mini-btn" id="${playId}" data-playing="0">▶ 再生</button>
@@ -557,7 +598,7 @@ function renderList() {
     const gainSlider = document.getElementById(gainId);
     const gainValEl  = document.getElementById('gv-'+r.idx);
     gainSlider.addEventListener('input', () => {
-      gainValEl.textContent = '×' + parseFloat(gainSlider.value).toFixed(1);
+      gainValEl.textContent = '×' + parseInt(gainSlider.value);
       if (currentBlobUrl === r.url && currentGainNode) {
         currentGainNode.gain.setTargetAtTime(parseFloat(gainSlider.value), audioCtx.currentTime, 0.05);
       }
@@ -566,7 +607,7 @@ function renderList() {
     // Play button
     const playBtn = document.getElementById(playId);
     playBtn.addEventListener('click', () => {
-      const g = parseFloat(gainSlider.value);
+      const g = parseInt(gainSlider.value);
       const prog = document.getElementById(progId);
       playWithGain(r, g, prog, playBtn);
     });
