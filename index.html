@@ -183,20 +183,25 @@ canvas { width: 100%; display: block; }
 .info-cell-label { font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; margin-bottom: 4px; }
 .info-cell-val { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--text); font-weight: 700; }
 
-.rec-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; padding-right: 2px; }
+.rec-list { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; padding-right: 2px; }
 .rec-list::-webkit-scrollbar { width: 4px; }
 .rec-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-.rec-item { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; animation: fadeIn 0.25s ease; }
+.rec-item { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; animation: fadeIn 0.25s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 .rec-item-top { display: flex; justify-content: space-between; align-items: center; }
 .rec-item-name { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent); font-weight: 700; }
 .rec-item-meta { font-size: 11px; color: var(--text-muted); }
-.rec-item-actions { display: flex; gap: 6px; align-items: center; }
+.rec-item-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .mini-btn { font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; transition: all 0.15s; letter-spacing: 0.05em; }
 .mini-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.mini-btn.active-play { border-color: var(--green); color: var(--green); background: rgba(79,209,160,0.12); }
 .mini-btn.danger:hover { border-color: var(--red); color: var(--red); background: var(--red-dim); }
-audio { width: 100%; height: 30px; border-radius: 6px; }
+.gain-row { display: flex; align-items: center; gap: 10px; }
+.gain-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.gain-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--green); min-width: 44px; text-align: right; }
+.progress-bar-wrap { position: relative; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; cursor: pointer; }
+.progress-bar-fill { height: 100%; width: 0%; background: var(--accent); border-radius: 2px; transition: width 0.1s; pointer-events: none; }
 .empty-msg { text-align: center; padding: 28px 0; color: var(--text-dim); font-size: 13px; letter-spacing: 0.1em; }
 
 .guide { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
@@ -453,24 +458,121 @@ function finalizeRec() {
   renderList();
 }
 
+// ── Playback with WebAudio gain boost ─────────────────────────────────────
+let currentSource = null;
+let currentGainNode = null;
+let currentBlobUrl = null;
+let progressInterval = null;
+
+async function playWithGain(r, gainVal, progressEl, playBtn) {
+  await ensureCtx();
+  // Stop previous
+  if (currentSource) { try { currentSource.stop(); } catch(e){} currentSource = null; }
+  clearInterval(progressInterval);
+
+  // Reset all play buttons
+  document.querySelectorAll('.mini-btn.active-play').forEach(b => {
+    b.classList.remove('active-play'); b.textContent = '▶ 再生';
+  });
+
+  if (currentBlobUrl === r.url && playBtn.dataset.playing === '1') {
+    playBtn.dataset.playing = '0'; currentBlobUrl = null;
+    if (progressEl) progressEl.style.width = '0%';
+    return;
+  }
+
+  // Fetch blob → ArrayBuffer → decode
+  const resp = await fetch(r.url);
+  const arrayBuf = await resp.arrayBuffer();
+  let audioBuf;
+  try { audioBuf = await audioCtx.decodeAudioData(arrayBuf); }
+  catch(e) { setStatus('⚠ デコードエラー: ' + e.message); return; }
+
+  currentGainNode = audioCtx.createGain();
+  currentGainNode.gain.value = gainVal;
+  currentGainNode.connect(audioCtx.destination);
+
+  currentSource = audioCtx.createBufferSource();
+  currentSource.buffer = audioBuf;
+  currentSource.connect(currentGainNode);
+  currentSource.start(0);
+  currentBlobUrl = r.url;
+  playBtn.classList.add('active-play');
+  playBtn.textContent = '⏹ 停止';
+  playBtn.dataset.playing = '1';
+
+  const duration = audioBuf.duration;
+  const startTime = audioCtx.currentTime;
+  clearInterval(progressInterval);
+  progressInterval = setInterval(() => {
+    const elapsed = audioCtx.currentTime - startTime;
+    if (progressEl) progressEl.style.width = Math.min(100, elapsed / duration * 100) + '%';
+    if (elapsed >= duration) {
+      clearInterval(progressInterval);
+      playBtn.classList.remove('active-play');
+      playBtn.textContent = '▶ 再生';
+      playBtn.dataset.playing = '0';
+      if (progressEl) progressEl.style.width = '0%';
+    }
+  }, 80);
+
+  currentSource.onended = () => {
+    clearInterval(progressInterval);
+    playBtn.classList.remove('active-play');
+    playBtn.textContent = '▶ 再生';
+    playBtn.dataset.playing = '0';
+    if (progressEl) progressEl.style.width = '0%';
+  };
+}
+
 function renderList() {
   if(!recordings.length){ recList.innerHTML='<div class="empty-msg">まだ録音がありません</div>'; return; }
   recList.innerHTML='';
   [...recordings].reverse().forEach(r=>{
     const el=document.createElement('div'); el.className='rec-item';
+
+    const gainId  = 'gain-' + r.idx;
+    const progId  = 'prog-' + r.idx;
+    const playId  = 'play-' + r.idx;
+
     el.innerHTML=`
       <div class="rec-item-top">
         <div class="rec-item-name">REC #${String(r.idx).padStart(2,'0')}</div>
         <div class="rec-item-meta">${r.freq} Hz · ${r.dur}s · ${r.ts}</div>
       </div>
-      <audio controls src="${r.url}"></audio>
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" id="${progId}"></div></div>
+      <div class="gain-row">
+        <span class="gain-label">再生音量ゲイン</span>
+        <input type="range" id="${gainId}" min="1" max="20" value="5" step="0.5" style="flex:1">
+        <span class="gain-val" id="gv-${r.idx}">×5.0</span>
+      </div>
       <div class="rec-item-actions">
-        <button class="mini-btn" onclick="dlRec('${r.url}',${r.idx},'${r.freq}')">↓ ダウンロード</button>
+        <button class="mini-btn" id="${playId}" data-playing="0">▶ 再生</button>
+        <button class="mini-btn" onclick="dlRec('${r.url}',${r.idx},'${r.freq}')">↓ DL</button>
         <button class="mini-btn danger" onclick="delRec(${r.idx})">削除</button>
       </div>`;
     recList.appendChild(el);
+
+    // Gain slider live update
+    const gainSlider = document.getElementById(gainId);
+    const gainValEl  = document.getElementById('gv-'+r.idx);
+    gainSlider.addEventListener('input', () => {
+      gainValEl.textContent = '×' + parseFloat(gainSlider.value).toFixed(1);
+      if (currentBlobUrl === r.url && currentGainNode) {
+        currentGainNode.gain.setTargetAtTime(parseFloat(gainSlider.value), audioCtx.currentTime, 0.05);
+      }
+    });
+
+    // Play button
+    const playBtn = document.getElementById(playId);
+    playBtn.addEventListener('click', () => {
+      const g = parseFloat(gainSlider.value);
+      const prog = document.getElementById(progId);
+      playWithGain(r, g, prog, playBtn);
+    });
   });
 }
+
 window.dlRec=(url,idx,freq)=>{const a=document.createElement('a');a.href=url;a.download=`echo_${freq}hz_${String(idx).padStart(2,'0')}.webm`;a.click();};
 window.delRec=(idx)=>{ recordings=recordings.filter(r=>r.idx!==idx); infoCount.textContent=recordings.length; renderList(); };
 
