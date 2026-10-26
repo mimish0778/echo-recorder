@@ -6,10 +6,12 @@ HTML ファイル 1 つで動作し、インストールやビルドは不要で
 
 **デモ:** https://mimish0778.github.io/echo-recorder/
 
+<img src="images/screenshot.png" alt="22kHz のトーンを出しながら録音している画面" width="400">
+
 ## 機能
 
 - 20Hz〜22,000Hz のトーンを出力（初期値は 22,000Hz）。出力中も周波数、音量、波形を変更できます
-- 波形は SINE、SQUARE、SAWTOOTH、TRIANGLE の 4 種類
+- 波形はサイン波、矩形波、のこぎり波、三角波の 4 種類（ボタンの表記は SINE、SQUARE、SAW、TRI）
 - よく使う周波数のプリセット（100Hz、440Hz、1kHz、4kHz、8kHz、15kHz、18kHz、22kHz）
 - 設定した周波数の波長（音速 343m/s で計算）と周期、音域の目安を表示
 - ブラウザのエコーキャンセル、ノイズ抑制、自動ゲイン調整をオフにしてマイクを録音
@@ -66,3 +68,7 @@ python3 -m http.server 8000
 
 - HTML / CSS / JavaScript（ライブラリやフレームワークは不使用）
 - フォント: [Noto Sans JP](https://fonts.google.com/noto/specimen/Noto+Sans+JP)、[JetBrains Mono](https://fonts.google.com/specimen/JetBrains+Mono)（Google Fonts）
+
+## ライセンス
+
+[MIT License](LICENSE)
