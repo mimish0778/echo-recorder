@@ -361,7 +361,7 @@ let audioCtx=null, oscillator=null, gainNode=null;
 let emitting=false, recording=false;
 let micStream=null, micAnalyser=null;
 let mediaRecorder=null, chunks=[];
-let recordings=[], recStart=null, timerIv=null, animId=null;
+let recordings=[], recSeq=0, recStart=null, timerIv=null, animId=null;
 let waveType='sine';
 
 const $=id=>document.getElementById(id);
@@ -502,7 +502,8 @@ function finalizeRec() {
   const url=URL.createObjectURL(blob);
   const dur=((Date.now()-recStart)/1000).toFixed(1);
   const freq=freqSlider.value;
-  const idx=recordings.length+1;
+  // 削除で欠番が出ても番号が重ならないよう、件数ではなく通し番号を使う
+  const idx=++recSeq;
   const ts=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   recordings.push({url,blob,dur,freq,idx,ts});
   infoCount.textContent=recordings.length;
@@ -625,7 +626,13 @@ function renderList() {
 }
 
 window.dlRec=(url,idx,freq)=>{const a=document.createElement('a');a.href=url;a.download=`echo_${freq}hz_${String(idx).padStart(2,'0')}.webm`;a.click();};
-window.delRec=(idx)=>{ recordings=recordings.filter(r=>r.idx!==idx); infoCount.textContent=recordings.length; renderList(); };
+window.delRec=(idx)=>{
+  const r=recordings.find(r=>r.idx===idx);
+  if(r){
+    if(currentBlobUrl===r.url&&currentSource){ try{currentSource.stop();}catch(e){} currentSource=null; currentBlobUrl=null; }
+    URL.revokeObjectURL(r.url);
+  }
+  recordings=recordings.filter(r=>r.idx!==idx); infoCount.textContent=recordings.length; renderList(); };
 
 function setStatus(msg){statusText.textContent=msg;}
 
